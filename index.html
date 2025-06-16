@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Приложение для поиска фильмов</title>
+    <link rel="stylesheet" href="./style.css" />
+</head>
+
+<body>
+    <div class="container">
+        <form id="login-form">
+            <h1>Авторизоваться</h1>
+            <div class="form-group">
+                <label for="login-email">Email</label>
+                <input type="email" id="login-email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="login-password">Пароль</label>
+                <input type="password" id="login-password" name="password" required>
+                <p id="login-error" class="error"></p>
+            </div>
+            <button type="submit" id="login-btn">Авторизоваться</button>
+            <div class="switch-form">
+                У вас нет учетной записи? <a id="show-register">Зарегистрироваться</a>
+            </div>
+        </form>
+
+        <form id="register-form" class="hidden">
+            <h1>Зарегистрироваться</h1>
+            <div class="form-group">
+                <label for="register-name">Имя</label>
+                <input type="text" id="register-name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="register-email">Email</label>
+                <input type="email" id="register-email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="register-password">Пароль</label>
+                <input type="password" id="register-password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="register-confirm">Подтвердите пароль</label>
+                <input type="password" id="register-confirm" name="confirm" required>
+                <p id="register-error" class="error"></p>
+            </div>
+            <button type="submit" id="register-btn">Зарегистрироваться</button>
+            <div class="switch-form">
+                У вас уже есть аккаунт? <a id="show-login">Авторизоваться</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="container-movie hidden">
+        <div id="movie-search" class="hidden">
+            <h1>Добро пожаловать, <span id="user-name"></span>!</h1>
+            <form id="search-form" class="search-form">
+                <input type="text" id="search-input" placeholder="Введите название фильма...">
+                <select id="type-select">
+                    <option value="">Все</option>
+                    <option value="movie">Фильм</option>
+                    <option value="series">Сериал</option>
+                    <option value="episode">Эпизод</option>
+                </select>
+                <button type="submit" id="search-button">Поиск</button>
+                <button type="button" id="logout-btn">Выйти</button>
+            </form>
+
+            <div id="loading" class="loading hidden">
+                Загрузка...
+            </div>
+
+            <div id="movies-container" class="movies-list">
+            </div>
+
+            <div id="error-message" class="error hidden">
+                Фильм не найден!
+            </div>
+        </div>
+    </div>
+
+    <div id="movie-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div id="movie-details"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

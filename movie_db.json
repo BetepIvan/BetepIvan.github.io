@@ -1,0 +1,22 @@
+{
+  "users": [
+    {
+      "id": "e91d",
+      "name": "Ivan ",
+      "email": "Ivan@asd.as",
+      "password": "123456"
+    },
+    {
+      "id": "3732",
+      "name": "Роман",
+      "email": "Roman@ad.as",
+      "password": "555777"
+    },
+    {
+      "id": "3aac",
+      "name": "Irina",
+      "email": "Myp@asd.as",
+      "password": "162534"
+    }
+  ]
+}
