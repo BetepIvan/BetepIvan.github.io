@@ -19,14 +19,14 @@ function setupEventListeners() {
     document.getElementById('show-register').addEventListener('click', showRegisterForm);
     document.getElementById('show-login').addEventListener('click', showLoginForm);
     
-    document.getElementById('register-form').addEventListener('submit', function(e) {
+    document.getElementById('register-form').addEventListener('submit', async function(e) {
         e.preventDefault();
-        register();
+        await register();
     });
     
-    document.getElementById('login-form').addEventListener('submit', function(e) {
+    document.getElementById('login-form').addEventListener('submit', async function(e) {
         e.preventDefault();
-        login();
+        await login();
     });
     
     document.getElementById('logout-btn').addEventListener('click', logout);
@@ -36,10 +36,16 @@ function setupEventListeners() {
         searchMovies();
     });
     
-    document.querySelector('.close-btn').addEventListener('click', closeModal);
+    document.getElementById('favorites-button').addEventListener('click', showFavorites);
     
-    window.addEventListener('click', function(event) {
-        if (event.target === document.getElementById('movie-modal')) {
+    document.querySelector('.close-btn').addEventListener('click', function(e) {
+        e.preventDefault();
+        closeModal();
+    });
+    
+    document.addEventListener('click', function(event) {
+        const modal = document.getElementById('movie-modal');
+        if (event.target === modal) {
             closeModal();
         }
     });
@@ -48,25 +54,16 @@ function setupEventListeners() {
 function initDB() {
     const savedDB = localStorage.getItem('movieAppDB');
     if (savedDB) {
-        try {
-            movieAppDB = JSON.parse(savedDB);
-        } catch (e) {
-            console.error('Ошибка при чтении базы данных:', e);
-            resetDB();
-        }
+        movieAppDB = JSON.parse(savedDB);
     } else {
-        resetDB();
+        movieAppDB = {
+            users: [],
+            favorites: {}
+        };
+        localStorage.setItem('movieAppDB', JSON.stringify(movieAppDB));
     }
     
     checkLoggedIn();
-}
-
-function resetDB() {
-    movieAppDB = {
-        users: [],
-        favorites: {}
-    };
-    saveDB();
 }
 
 function saveDB() {
@@ -76,95 +73,84 @@ function saveDB() {
 function checkLoggedIn() {
     const savedUser = localStorage.getItem('movieAppCurrentUser');
     if (savedUser) {
-        try {
-            const user = JSON.parse(savedUser);
-            const dbUser = movieAppDB.users.find(u => u.id === user.id);
-            if (dbUser) {
-                currentUser = dbUser;
-                showMovieSearch();
-            }
-        } catch (e) {
-            console.error('Ошибка при чтении данных пользователя:', e);
-            localStorage.removeItem('movieAppCurrentUser');
+        const user = JSON.parse(savedUser);
+        const dbUser = movieAppDB.users.find(u => u.id === user.id);
+        if (dbUser) {
+            currentUser = dbUser;
+            showMovieSearch();
         }
     }
 }
 
-function register() {
-    const name = document.getElementById('register-name').value.trim();
-    const email = document.getElementById('register-email').value.trim();
+async function register() {
+    const name = document.getElementById('register-name').value;
+    const email = document.getElementById('register-email').value;
     const password = document.getElementById('register-password').value;
     const confirm = document.getElementById('register-confirm').value;
     const errorElement = document.getElementById('register-error');
-    
-    errorElement.textContent = '';
-    
+
     if (!name || !email || !password || !confirm) {
         errorElement.textContent = 'Пожалуйста, заполните все поля';
         return;
     }
-    
+
     if (password !== confirm) {
         errorElement.textContent = 'Пароли не совпадают';
         return;
     }
-    
+
     if (movieAppDB.users.some(u => u.email === email)) {
         errorElement.textContent = 'Email уже зарегистрирован';
         return;
     }
-    
-    const newUser = {
-        id: Date.now(),
-        name,
-        email,
-        password: simpleHash(password) 
-    };
-    
-    movieAppDB.users.push(newUser);
-    movieAppDB.favorites[newUser.id] = [];
-    saveDB();
-    
-    currentUser = newUser;
-    localStorage.setItem('movieAppCurrentUser', JSON.stringify(newUser));
-    showMovieSearch();
-    document.getElementById('register-form').reset();
-}
 
-function simpleHash(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = (hash << 5) - hash + char;
-        hash |= 0; 
+    try {
+        const newUser = {
+            id: Date.now().toString(),
+            name,
+            email,
+            password
+        };
+
+        movieAppDB.users.push(newUser);
+        movieAppDB.favorites[newUser.id] = [];
+        saveDB();
+
+        currentUser = newUser;
+        localStorage.setItem('movieAppCurrentUser', JSON.stringify(newUser));
+        showMovieSearch();
+        document.getElementById('register-form').reset();
+    } catch (error) {
+        errorElement.textContent = 'Ошибка регистрации: ' + error.message;
+        console.error(error);
     }
-    return hash.toString();
 }
 
-function login() {
-    const email = document.getElementById('login-email').value.trim();
+async function login() {
+    const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-password').value;
     const errorElement = document.getElementById('login-error');
-    
-    errorElement.textContent = '';
-    
+
     if (!email || !password) {
         errorElement.textContent = 'Пожалуйста, заполните все поля';
         return;
     }
-    
-    const user = movieAppDB.users.find(u => 
-        u.email === email && 
-        u.password === simpleHash(password)
-    );
-    
-    if (user) {
-        currentUser = user;
-        localStorage.setItem('movieAppCurrentUser', JSON.stringify(user));
-        showMovieSearch();
-        document.getElementById('login-form').reset();
-    } else {
+
+    try {
+        const user = movieAppDB.users.find(u => u.email === email && u.password === password);
+
+        if (user) {
+            currentUser = user;
+            localStorage.setItem('movieAppCurrentUser', JSON.stringify(user));
+            showMovieSearch();
+            document.getElementById('login-form').reset();
+            return;
+        }
+
         errorElement.textContent = 'Неверный email или пароль';
+    } catch (error) {
+        errorElement.textContent = 'Ошибка входа: ' + error.message;
+        console.error(error);
     }
 }
 
@@ -207,32 +193,27 @@ function clearErrors() {
 async function searchMovies() {
     const searchTerm = document.getElementById('search-input').value.trim();
     const type = document.getElementById('type-select').value;
-    
+
     if (!searchTerm) {
         alert('Пожалуйста, введите поисковый запрос');
         return;
     }
-    
+
     if (searchQuery !== searchTerm) {
         currentPage = 1;
         searchQuery = searchTerm;
     }
-    
+
     showLoading(true);
     clearError();
-    
+
     try {
         let url = `https://www.omdbapi.com/?apikey=${API_KEY}&s=${encodeURIComponent(searchTerm)}&page=${currentPage}`;
         if (type) url += `&type=${type}`;
-        
+
         const response = await fetch(url);
-        
-        if (!response.ok) {
-            throw new Error(`Ошибка HTTP: ${response.status}`);
-        }
-        
         const data = await response.json();
-        
+
         if (data.Response === 'True') {
             totalResults = parseInt(data.totalResults);
             displayMovies(data.Search);
@@ -241,8 +222,8 @@ async function searchMovies() {
             showError(data.Error || 'Фильмы не найдены');
         }
     } catch (error) {
-        showError('Ошибка при поиске фильмов: ' + error.message);
-        console.error('Ошибка поиска:', error);
+        showError('Ошибка при поиске фильмов');
+        console.error(error);
     } finally {
         showLoading(false);
     }
@@ -251,158 +232,103 @@ async function searchMovies() {
 function displayMovies(movies) {
     const container = document.getElementById('movies-container');
     container.innerHTML = '';
-    
+
     if (!movies || movies.length === 0) {
         container.innerHTML = '<p>Фильмы не найдены</p>';
         return;
     }
-    
-    const fragment = document.createDocumentFragment();
-    
+
     movies.forEach(movie => {
-        const isFavorite = currentUser && 
+        const isFavorite = currentUser &&
             movieAppDB.favorites[currentUser.id]?.includes(movie.imdbID);
-        
+
         const movieCard = document.createElement('div');
         movieCard.className = 'movie-card';
-        
-        const img = document.createElement('img');
-        img.src = movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x450?text=No+Poster';
-        img.alt = movie.Title;
-        
-        const title = document.createElement('h3');
-        title.textContent = `${movie.Title} (${movie.Year})`;
-        
-        const type = document.createElement('p');
-        type.textContent = `Тип: ${movie.Type}`;
-        
-        const detailsBtn = document.createElement('button');
-        detailsBtn.className = 'details-btn';
-        detailsBtn.textContent = 'Подробности';
-        detailsBtn.dataset.imdbid = movie.imdbID;
-        
-        const favBtn = document.createElement('button');
-        favBtn.className = `favorite-btn ${isFavorite ? 'favorited' : ''}`;
-        favBtn.textContent = isFavorite ? '❤️ В избранном' : '❤️ В избранное';
-        favBtn.dataset.imdbid = movie.imdbID;
-        
-        movieCard.appendChild(img);
-        movieCard.appendChild(title);
-        movieCard.appendChild(type);
-        movieCard.appendChild(detailsBtn);
-        movieCard.appendChild(favBtn);
-        
-        detailsBtn.addEventListener('click', () => showMovieDetails(movie.imdbID));
-        favBtn.addEventListener('click', () => toggleFavorite(movie.imdbID, favBtn));
-        
-        fragment.appendChild(movieCard);
+        movieCard.innerHTML = `
+            <img src="${movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x450?text=No+Poster'}" alt="${movie.Title}">
+            <h3>${movie.Title} (${movie.Year})</h3>
+            <p>Тип: ${movie.Type}</p>
+            <button class="details-btn" data-imdbid="${movie.imdbID}">Подробности</button>
+            <button class="favorite-btn ${isFavorite ? 'favorited' : ''}" 
+                    data-imdbid="${movie.imdbID}">
+                ${isFavorite ? '❤️ В избранном' : '❤️ В избранное'}
+            </button>
+        `;
+
+        container.appendChild(movieCard);
     });
-    
-    container.appendChild(fragment);
+
+    document.querySelectorAll('.details-btn').forEach(btn => {
+        btn.addEventListener('click', () => showMovieDetails(btn.dataset.imdbid));
+    });
+
+    document.querySelectorAll('.favorite-btn').forEach(btn => {
+        btn.addEventListener('click', () => toggleFavorite(btn.dataset.imdbid, btn));
+    });
 }
 
 async function showMovieDetails(imdbID) {
     showLoading(true);
-    
+
     try {
         const response = await fetch(`https://www.omdbapi.com/?apikey=${API_KEY}&i=${imdbID}&plot=full`);
-        
-        if (!response.ok) {
-            throw new Error(`Ошибка HTTP: ${response.status}`);
-        }
-        
         const movie = await response.json();
-        
+
         if (movie.Response === 'True') {
             displayMovieDetails(movie);
         } else {
-            showError(movie.Error || 'Не удалось загрузить детали фильма');
+            showError('Не удалось загрузить детали фильма');
         }
     } catch (error) {
-        showError('Ошибка при загрузке деталей фильма: ' + error.message);
-        console.error('Ошибка загрузки деталей:', error);
+        showError('Ошибка при загрузке деталей фильма');
+        console.error(error);
     } finally {
         showLoading(false);
     }
 }
 
 function displayMovieDetails(movie) {
-    const isFavorite = currentUser && 
+    const isFavorite = currentUser &&
         movieAppDB.favorites[currentUser.id]?.includes(movie.imdbID);
-    
+
     const details = document.getElementById('movie-details');
-    details.innerHTML = '';
-    
-    const title = document.createElement('h2');
-    title.textContent = `${movie.Title} (${movie.Year})`;
-    
-    const flexContainer = document.createElement('div');
-    flexContainer.style.display = 'flex';
-    flexContainer.style.gap = '20px';
-    flexContainer.style.marginTop = '20px';
-    
-    const leftCol = document.createElement('div');
-    leftCol.style.flex = '1';
-    
-    const posterImg = document.createElement('img');
-    posterImg.src = movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x450?text=No+Poster';
-    posterImg.alt = movie.Title;
-    posterImg.style.maxWidth = '100%';
-    
-    const favBtn = document.createElement('button');
-    favBtn.className = `favorite-btn ${isFavorite ? 'favorited' : ''}`;
-    favBtn.textContent = isFavorite ? '❤️ В избранном' : '❤️ В избранное';
-    favBtn.dataset.imdbid = movie.imdbID;
-    favBtn.style.marginTop = '10px';
-    favBtn.style.width = '100%';
-    
-    leftCol.appendChild(posterImg);
-    leftCol.appendChild(favBtn);
-    
-    const rightCol = document.createElement('div');
-    rightCol.style.flex = '2';
-    
-    const detailsToShow = [
-        { label: 'Рейтинг', value: movie.Rated },
-        { label: 'Дата выхода', value: movie.Released },
-        { label: 'Продолжительность', value: movie.Runtime },
-        { label: 'Жанр', value: movie.Genre },
-        { label: 'Режиссер', value: movie.Director },
-        { label: 'Сценарист', value: movie.Writer },
-        { label: 'Актеры', value: movie.Actors },
-        { label: 'Сюжет', value: movie.Plot },
-        { label: 'Язык', value: movie.Language },
-        { label: 'Страна', value: movie.Country },
-        { label: 'Награды', value: movie.Awards },
-        { label: 'IMDb Рейтинг', value: movie.imdbRating },
-        { label: 'IMDb Голоса', value: movie.imdbVotes },
-        { label: 'Тип', value: movie.Type }
-    ];
-    
-    detailsToShow.forEach(detail => {
-        if (detail.value && detail.value !== 'N/A') {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong>${detail.label}:</strong> ${detail.value}`;
-            rightCol.appendChild(p);
-        }
-    });
-    
-    if (movie.totalSeasons) {
-        const p = document.createElement('p');
-        p.innerHTML = `<strong>Всего сезонов:</strong> ${movie.totalSeasons}`;
-        rightCol.appendChild(p);
-    }
-    
-    flexContainer.appendChild(leftCol);
-    flexContainer.appendChild(rightCol);
-    
-    details.appendChild(title);
-    details.appendChild(flexContainer);
-    
-    favBtn.addEventListener('click', function() {
+    details.innerHTML = `
+        <h2>${movie.Title} (${movie.Year})</h2>
+        <div style="display: flex; gap: 20px; margin-top: 20px;">
+            <div style="flex: 1;">
+                <img src="${movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x450?text=No+Poster'}" 
+                     alt="${movie.Title}" style="max-width: 100%;">
+                <button class="favorite-btn ${isFavorite ? 'favorited' : ''}" 
+                        data-imdbid="${movie.imdbID}" 
+                        style="margin-top: 10px; width: 100%;">
+                    ${isFavorite ? '❤️ В избранном' : '❤️ В избранное'}
+                </button>
+            </div>
+            <div style="flex: 2;">
+                <p><strong>Рейтинг:</strong> ${movie.Rated}</p>
+                <p><strong>Дата выхода:</strong> ${movie.Released}</p>
+                <p><strong>Продолжительность:</strong> ${movie.Runtime}</p>
+                <p><strong>Жанр:</strong> ${movie.Genre}</p>
+                <p><strong>Режиссер:</strong> ${movie.Director}</p>
+                <p><strong>Сценарист:</strong> ${movie.Writer}</p>
+                <p><strong>Актеры:</strong> ${movie.Actors}</p>
+                <p><strong>Сюжет:</strong> ${movie.Plot}</p>
+                <p><strong>Язык:</strong> ${movie.Language}</p>
+                <p><strong>Страна:</strong> ${movie.Country}</p>
+                <p><strong>Награды:</strong> ${movie.Awards}</p>
+                <p><strong>IMDb Рейтинг:</strong> ${movie.imdbRating}</p>
+                <p><strong>IMDb Голоса:</strong> ${movie.imdbVotes}</p>
+                <p><strong>Тип:</strong> ${movie.Type}</p>
+                ${movie.totalSeasons ? `<p><strong>Всего сезонов:</strong> ${movie.totalSeasons}</p>` : ''}
+            </div>
+        </div>
+    `;
+
+    details.querySelector('.favorite-btn').addEventListener('click', function(e) {
+        e.preventDefault();
         toggleFavorite(this.dataset.imdbid, this);
     });
-    
+
     openModal();
 }
 
@@ -411,13 +337,13 @@ function toggleFavorite(imdbID, button) {
         alert('Пожалуйста, войдите в систему');
         return;
     }
-    
+
     if (!movieAppDB.favorites[currentUser.id]) {
         movieAppDB.favorites[currentUser.id] = [];
     }
-    
+
     const index = movieAppDB.favorites[currentUser.id].indexOf(imdbID);
-    
+
     if (index === -1) {
         movieAppDB.favorites[currentUser.id].push(imdbID);
         if (button) {
@@ -431,8 +357,75 @@ function toggleFavorite(imdbID, button) {
             button.classList.remove('favorited');
         }
     }
-    
+
     saveDB();
+}
+
+async function showFavorites() {
+    if (!currentUser) {
+        alert('Пожалуйста, войдите в систему');
+        return;
+    }
+
+    const favorites = movieAppDB.favorites[currentUser.id] || [];
+
+    if (favorites.length === 0) {
+        document.getElementById('movies-container').innerHTML = '<p>У вас пока нет избранных фильмов</p>';
+        return;
+    }
+
+    showLoading(true);
+    clearError();
+
+    try {
+        const movies = await Promise.all(
+            favorites.map(id =>
+                fetch(`https://www.omdbapi.com/?apikey=${API_KEY}&i=${id}`)
+                    .then(res => res.json())
+            )
+        );
+
+        displayMovies(movies);
+    } catch (error) {
+        showError('Ошибка при загрузке избранных фильмов');
+        console.error(error);
+    } finally {
+        showLoading(false);
+    }
+}
+
+function openModal() {
+    document.getElementById('movie-modal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('movie-modal').style.display = 'none';
+}
+
+function showLoading(show) {
+    document.getElementById('loading').classList.toggle('hidden', !show);
+}
+
+function showError(message) {
+    const errorElement = document.getElementById('error-message');
+    errorElement.textContent = message;
+    errorElement.classList.remove('hidden');
+}
+
+function clearError() {
+    document.getElementById('error-message').classList.add('hidden');
+}
+
+function showRegisterForm() {
+    document.getElementById('login-form').classList.add('hidden');
+    document.getElementById('register-form').classList.remove('hidden');
+    clearErrors();
+}
+
+function showLoginForm() {
+    document.getElementById('register-form').classList.add('hidden');
+    document.getElementById('login-form').classList.remove('hidden');
+    clearErrors();
 }
 
 function setupPagination() {
@@ -478,38 +471,4 @@ function setupPagination() {
         });
         paginationContainer.appendChild(nextBtn);
     }
-}
-
-function openModal() {
-    document.getElementById('movie-modal').style.display = 'block';
-}
-
-function closeModal() {
-    document.getElementById('movie-modal').style.display = 'none';
-}
-
-function showLoading(show) {
-    document.getElementById('loading').classList.toggle('hidden', !show);
-}
-
-function showError(message) {
-    const errorElement = document.getElementById('error-message');
-    errorElement.textContent = message;
-    errorElement.classList.remove('hidden');
-}
-
-function clearError() {
-    document.getElementById('error-message').classList.add('hidden');
-}
-
-function showRegisterForm() {
-    document.getElementById('login-form').classList.add('hidden');
-    document.getElementById('register-form').classList.remove('hidden');
-    clearErrors();
-}
-
-function showLoginForm() {
-    document.getElementById('register-form').classList.add('hidden');
-    document.getElementById('login-form').classList.remove('hidden');
-    clearErrors();
 }

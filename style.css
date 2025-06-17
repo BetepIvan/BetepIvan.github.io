@@ -113,6 +113,14 @@ button:hover {
     background-color: #c0392b;
 }
 
+#favorites-button {
+    background-color: #f39c12;
+}
+
+#favorites-button:hover {
+    background-color: #d35400;
+}
+
 .movies-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
