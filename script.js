@@ -6,10 +6,15 @@ let movieAppDB = {
 };
 
 let currentUser = null;
+let currentPage = 1;
+let totalResults = 0;
+let searchQuery = '';
+
 document.addEventListener('DOMContentLoaded', function() {
     initDB();
     setupEventListeners();
 });
+
 function setupEventListeners() {
     document.getElementById('show-register').addEventListener('click', showRegisterForm);
     document.getElementById('show-login').addEventListener('click', showLoginForm);
@@ -31,15 +36,15 @@ function setupEventListeners() {
         searchMovies();
     });
     
-    document.getElementById('favorites-button').addEventListener('click', showFavorites);
+    document.querySelector('.close-btn').addEventListener('click', closeModal);
     
-    document.querySelector('.close').addEventListener('click', closeModal);
     window.addEventListener('click', function(event) {
         if (event.target === document.getElementById('movie-modal')) {
             closeModal();
         }
     });
 }
+
 function initDB() {
     const savedDB = localStorage.getItem('movieAppDB');
     if (savedDB) {
@@ -55,6 +60,7 @@ function initDB() {
     
     checkLoggedIn();
 }
+
 function resetDB() {
     movieAppDB = {
         users: [],
@@ -62,9 +68,11 @@ function resetDB() {
     };
     saveDB();
 }
+
 function saveDB() {
     localStorage.setItem('movieAppDB', JSON.stringify(movieAppDB));
 }
+
 function checkLoggedIn() {
     const savedUser = localStorage.getItem('movieAppCurrentUser');
     if (savedUser) {
@@ -81,6 +89,7 @@ function checkLoggedIn() {
         }
     }
 }
+
 function register() {
     const name = document.getElementById('register-name').value.trim();
     const email = document.getElementById('register-email').value.trim();
@@ -121,6 +130,7 @@ function register() {
     showMovieSearch();
     document.getElementById('register-form').reset();
 }
+
 function simpleHash(str) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -130,6 +140,7 @@ function simpleHash(str) {
     }
     return hash.toString();
 }
+
 function login() {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
@@ -156,6 +167,7 @@ function login() {
         errorElement.textContent = 'Неверный email или пароль';
     }
 }
+
 function logout() {
     currentUser = null;
     localStorage.removeItem('movieAppCurrentUser');
@@ -165,6 +177,7 @@ function logout() {
     document.getElementById('login-form').classList.remove('hidden');
     clearFormFields();
 }
+
 function showMovieSearch() {
     document.querySelector('.container').classList.add('hidden');
     document.querySelector('.container-movie').classList.remove('hidden');
@@ -175,6 +188,7 @@ function showMovieSearch() {
     clearFormFields();
     clearErrors();
 }
+
 function clearFormFields() {
     document.getElementById('login-email').value = '';
     document.getElementById('login-password').value = '';
@@ -184,10 +198,12 @@ function clearFormFields() {
     document.getElementById('register-confirm').value = '';
     document.getElementById('search-input').value = '';
 }
+
 function clearErrors() {
     document.getElementById('login-error').textContent = '';
     document.getElementById('register-error').textContent = '';
 }
+
 async function searchMovies() {
     const searchTerm = document.getElementById('search-input').value.trim();
     const type = document.getElementById('type-select').value;
@@ -197,11 +213,16 @@ async function searchMovies() {
         return;
     }
     
+    if (searchQuery !== searchTerm) {
+        currentPage = 1;
+        searchQuery = searchTerm;
+    }
+    
     showLoading(true);
     clearError();
     
     try {
-        let url = `https://www.omdbapi.com/?apikey=${API_KEY}&s=${encodeURIComponent(searchTerm)}`;
+        let url = `https://www.omdbapi.com/?apikey=${API_KEY}&s=${encodeURIComponent(searchTerm)}&page=${currentPage}`;
         if (type) url += `&type=${type}`;
         
         const response = await fetch(url);
@@ -213,7 +234,9 @@ async function searchMovies() {
         const data = await response.json();
         
         if (data.Response === 'True') {
+            totalResults = parseInt(data.totalResults);
             displayMovies(data.Search);
+            setupPagination();
         } else {
             showError(data.Error || 'Фильмы не найдены');
         }
@@ -224,6 +247,7 @@ async function searchMovies() {
         showLoading(false);
     }
 }
+
 function displayMovies(movies) {
     const container = document.getElementById('movies-container');
     container.innerHTML = '';
@@ -276,6 +300,7 @@ function displayMovies(movies) {
     
     container.appendChild(fragment);
 }
+
 async function showMovieDetails(imdbID) {
     showLoading(true);
     
@@ -300,6 +325,7 @@ async function showMovieDetails(imdbID) {
         showLoading(false);
     }
 }
+
 function displayMovieDetails(movie) {
     const isFavorite = currentUser && 
         movieAppDB.favorites[currentUser.id]?.includes(movie.imdbID);
@@ -379,6 +405,7 @@ function displayMovieDetails(movie) {
     
     openModal();
 }
+
 function toggleFavorite(imdbID, button) {
     if (!currentUser) {
         alert('Пожалуйста, войдите в систему');
@@ -406,120 +433,6 @@ function toggleFavorite(imdbID, button) {
     }
     
     saveDB();
-}
-async function showFavorites() {
-    if (!currentUser) {
-        alert('Пожалуйста, войдите в систему');
-        return;
-    }
-    
-    const favorites = movieAppDB.favorites[currentUser.id] || [];
-    
-    if (favorites.length === 0) {
-        document.getElementById('movies-container').innerHTML = '<p>У вас пока нет избранных фильмов</p>';
-        return;
-    }
-    
-    showLoading(true);
-    clearError();
-    
-    try {
-        const movies = await Promise.all(
-            favorites.map(id => 
-                fetch(`https://www.omdbapi.com/?apikey=${API_KEY}&i=${id}`)
-                    .then(res => {
-                        if (!res.ok) throw new Error(`Ошибка HTTP: ${res.status}`);
-                        return res.json();
-                    })
-                    .catch(error => {
-                        console.error(`Ошибка загрузки фильма ${id}:`, error);
-                        return null;
-                    })
-            )
-        );
-        
-        const validMovies = movies.filter(movie => movie && movie.Response === 'True');
-        displayMovies(validMovies);
-        
-        if (validMovies.length !== movies.length) {
-            showError('Не удалось загрузить некоторые избранные фильмы');
-        }
-    } catch (error) {
-        showError('Ошибка при загрузке избранных фильмов: ' + error.message);
-        console.error('Ошибка загрузки избранного:', error);
-    } finally {
-        showLoading(false);
-    }
-}
-function openModal() {
-    document.getElementById('movie-modal').style.display = 'block';
-}
-function closeModal() {
-    document.getElementById('movie-modal').style.display = 'none';
-}
-function showLoading(show) {
-    document.getElementById('loading').classList.toggle('hidden', !show);
-}
-function showError(message) {
-    const errorElement = document.getElementById('error-message');
-    errorElement.textContent = message;
-    errorElement.classList.remove('hidden');
-}
-function clearError() {
-    document.getElementById('error-message').classList.add('hidden');
-}
-function showRegisterForm() {
-    document.getElementById('login-form').classList.add('hidden');
-    document.getElementById('register-form').classList.remove('hidden');
-    clearErrors();
-}
-function showLoginForm() {
-    document.getElementById('register-form').classList.add('hidden');
-    document.getElementById('login-form').classList.remove('hidden');
-    clearErrors();
-}
-
-let currentPage = 1;
-let totalResults = 0;
-let searchQuery = '';
-
-async function searchMovies() {
-    const searchTerm = document.getElementById('search-input').value.trim();
-    const type = document.getElementById('type-select').value;
-
-    if (!searchTerm) {
-        alert('Пожалуйста, введите поисковый запрос');
-        return;
-    }
-
-    if (searchQuery !== searchTerm) {
-        currentPage = 1;
-        searchQuery = searchTerm;
-    }
-
-    showLoading(true);
-    clearError();
-
-    try {
-        let url = `https://www.omdbapi.com/?apikey=${API_KEY}&s=${encodeURIComponent(searchTerm)}&page=${currentPage}`;
-        if (type) url += `&type=${type}`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.Response === 'True') {
-            totalResults = parseInt(data.totalResults);
-            displayMovies(data.Search);
-            setupPagination();
-        } else {
-            showError(data.Error || 'Фильмы не найдены');
-        }
-    } catch (error) {
-        showError('Ошибка при поиске фильмов');
-        console.error(error);
-    } finally {
-        showLoading(false);
-    }
 }
 
 function setupPagination() {
@@ -567,26 +480,36 @@ function setupPagination() {
     }
 }
 
-const style = document.createElement('style');
-style.textContent = `
-    #pagination-container {
-        display: flex;
-        justify-content: center;
-        gap: 5px;
-        margin: 20px 0;
-    }
-    #pagination-container button {
-        padding: 5px 10px;
-        border: 1px solid #ddd;
-        background-color: #f5f5f5;
-        cursor: pointer;
-    }
-    #pagination-container button.active {
-        background-color: #3498db;
-        color: white;
-    }
-    #pagination-container button:hover:not(.active) {
-        background-color: #e0e0e0;
-    }
-`;
-document.head.appendChild(style);
+function openModal() {
+    document.getElementById('movie-modal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('movie-modal').style.display = 'none';
+}
+
+function showLoading(show) {
+    document.getElementById('loading').classList.toggle('hidden', !show);
+}
+
+function showError(message) {
+    const errorElement = document.getElementById('error-message');
+    errorElement.textContent = message;
+    errorElement.classList.remove('hidden');
+}
+
+function clearError() {
+    document.getElementById('error-message').classList.add('hidden');
+}
+
+function showRegisterForm() {
+    document.getElementById('login-form').classList.add('hidden');
+    document.getElementById('register-form').classList.remove('hidden');
+    clearErrors();
+}
+
+function showLoginForm() {
+    document.getElementById('register-form').classList.add('hidden');
+    document.getElementById('login-form').classList.remove('hidden');
+    clearErrors();
+}
